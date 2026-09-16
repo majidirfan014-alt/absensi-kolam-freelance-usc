@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin - Absensi Kolam Freelance</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- Login -->
+    <div id="login-page">
+        <div class="login-container">
+            <div class="login-card">
+                <h2>Admin Login</h2>
+                <p style="color:#6c757d; margin-bottom:1.5rem;">Absensi Kolam Freelance - UNESA Science Center</p>
+                <div id="login-error" style="display:none;" class="status-info error">Username atau password salah</div>
+                <form id="login-form">
+                    <div class="form-group">
+                        <input type="text" class="form-control" id="login-user" placeholder="Username" required autofocus value="admin">
+                    </div>
+                    <div class="form-group">
+                        <input type="password" class="form-control" id="login-pass" placeholder="Password" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Login</button>
+                </form>
+                <p style="margin-top:1rem; font-size:0.8rem; color:#6c757d;">
+                    <a href="index.html" style="color:#6c757d;">Kembali ke Halaman Absensi</a>
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dashboard -->
+    <div id="dashboard-page" style="display:none;">
+        <div class="admin-header">
+            <h1>Admin Absensi Kolam Freelance</h1>
+            <div>
+                <a href="#" onclick="showTab('rekap')">Rekap</a> |
+                <a href="#" onclick="showTab('staf')">Staf</a> |
+                <a href="#" onclick="showTab('lokasi')">Lokasi</a> |
+                <a href="#" onclick="doLogout()">Logout</a>
+            </div>
+        </div>
+
+        <div class="admin-container">
+            <div class="tab-nav">
+                <button class="tab-btn active" onclick="showTab('rekap')">Rekap Absensi</button>
+                <button class="tab-btn" onclick="showTab('staf')">Kelola Staf</button>
+                <button class="tab-btn" onclick="showTab('lokasi')">Kelola Lokasi</button>
+            </div>
+
+            <!-- REKAP -->
+            <div id="tab-rekap" class="tab-content active">
+                <div class="filter-bar" style="margin-bottom:1.5rem;">
+                    <div class="form-group">
+                        <label>Tanggal</label>
+                        <input type="date" class="form-control" id="f-tgl">
+                    </div>
+                    <div class="form-group">
+                        <label>Bulan</label>
+                        <input type="month" class="form-control" id="f-bulan">
+                    </div>
+                    <div class="form-group">
+                        <label>Cari Nama</label>
+                        <input type="text" class="form-control" id="f-nama" placeholder="Nama staf...">
+                    </div>
+                    <div class="form-group" style="display:flex; align-items:flex-end;">
+                        <button class="btn btn-primary" onclick="filterRekap()" style="margin-right:0.5rem;">Filter</button>
+                        <button class="btn btn-warning" onclick="resetFilter()">Reset</button>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="table-responsive">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>No</th>
+                                    <th>Nama</th>
+                                    <th>Tanggal</th>
+                                    <th>Hari</th>
+                                    <th>Jam Masuk</th>
+                                    <th>Jam Pulang</th>
+                                    <th>Status</th>
+                                    <th>Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody id="rekap-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div style="margin-top:1rem; text-align:right;">
+                    <button class="btn btn-success" onclick="exportRekap()" style="display:inline-block; width:auto; padding:0.6rem 1.2rem;">Export CSV</button>
+                </div>
+            </div>
+
+            <!-- STAF -->
+            <div id="tab-staf" class="tab-content">
+                <div class="card">
+                    <h3 style="margin-bottom:1rem;">Tambah Staf Baru</h3>
+                    <div style="display:flex; gap:1rem; flex-wrap:wrap;">
+                        <div class="form-group" style="flex:1; min-width:250px;">
+                            <input type="text" class="form-control" id="staf-nama" placeholder="Nama lengkap staf">
+                        </div>
+                        <button class="btn btn-success" onclick="addStaf()" style="width:auto; padding:0.75rem 1.5rem;">Tambah</button>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3 style="margin-bottom:1rem;">Daftar Staf</h3>
+                    <div class="table-responsive">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>No</th>
+                                    <th>Nama</th>
+                                    <th>Status</th>
+                                    <th>Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody id="staf-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- LOKASI -->
+            <div id="tab-lokasi" class="tab-content">
+                <div class="card">
+                    <h3 style="margin-bottom:1rem;">Tambah Lokasi Baru</h3>
+                    <div style="display:flex; gap:1rem; flex-wrap:wrap; align-items:flex-end;">
+                        <div class="form-group" style="flex:1; min-width:200px;">
+                            <label>Nama Lokasi</label>
+                            <input type="text" class="form-control" id="loc-nama" placeholder="Kolam Utama">
+                        </div>
+                        <div class="form-group" style="flex:1; min-width:150px;">
+                            <label>Latitude</label>
+                            <input type="number" step="any" class="form-control" id="loc-lat" placeholder="-7.xxxx">
+                        </div>
+                        <div class="form-group" style="flex:1; min-width:150px;">
+                            <label>Longitude</label>
+                            <input type="number" step="any" class="form-control" id="loc-lng" placeholder="112.xxxx">
+                        </div>
+                        <div class="form-group" style="flex:0.5; min-width:100px;">
+                            <label>Radius (m)</label>
+                            <input type="number" class="form-control" id="loc-radius" value="150">
+                        </div>
+                        <button class="btn btn-success" onclick="addLocation()" style="width:auto; padding:0.75rem 1.5rem;">Tambah</button>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3 style="margin-bottom:1rem;">Daftar Lokasi</h3>
+                    <div class="table-responsive">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>No</th>
+                                    <th>Nama</th>
+                                    <th>Latitude</th>
+                                    <th>Longitude</th>
+                                    <th>Radius</th>
+                                    <th>Status</th>
+                                    <th>Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody id="loc-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Detail Modal -->
+    <div id="detail-modal" class="modal-overlay">
+        <div class="modal-box">
+            <h3 style="margin-bottom:1rem;">Detail Absensi</h3>
+            <div id="detail-content"></div>
+            <button class="btn btn-primary" onclick="closeDetail()" style="margin-top:1rem;">Tutup</button>
+        </div>
+    </div>
+
+    <!-- Edit Staf Modal -->
+    <div id="edit-staf-modal" class="modal-overlay">
+        <div class="modal-box">
+            <h3 style="margin-bottom:1rem;">Edit Staf</h3>
+            <input type="hidden" id="edit-staf-id">
+            <div class="form-group">
+                <label>Nama</label>
+                <input type="text" class="form-control" id="edit-staf-nama">
+            </div>
+            <div class="form-group">
+                <label>Status</label>
+                <select class="form-control" id="edit-staf-status">
+                    <option value="aktif">Aktif</option>
+                    <option value="nonaktif">Nonaktif</option>
+                </select>
+            </div>
+            <div style="display:flex; gap:1rem;">
+                <button class="btn btn-primary" onclick="saveEditStaf()" style="flex:1;">Simpan</button>
+                <button class="btn btn-warning" onclick="closeEditStaf()" style="flex:1;">Batal</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Lokasi Modal -->
+    <div id="edit-loc-modal" class="modal-overlay">
+        <div class="modal-box">
+            <h3 style="margin-bottom:1rem;">Edit Lokasi</h3>
+            <input type="hidden" id="edit-loc-id">
+            <div class="form-group">
+                <label>Nama Lokasi</label>
+                <input type="text" class="form-control" id="edit-loc-nama">
+            </div>
+            <div class="form-group">
+                <label>Latitude</label>
+                <input type="number" step="any" class="form-control" id="edit-loc-lat">
+            </div>
+            <div class="form-group">
+                <label>Longitude</label>
+                <input type="number" step="any" class="form-control" id="edit-loc-lng">
+            </div>
+            <div class="form-group">
+                <label>Radius (m)</label>
+                <input type="number" class="form-control" id="edit-loc-radius">
+            </div>
+            <div class="form-group">
+                <label><input type="checkbox" id="edit-loc-active"> Aktif</label>
+            </div>
+            <div style="display:flex; gap:1rem;">
+                <button class="btn btn-primary" onclick="saveEditLoc()" style="flex:1;">Simpan</button>
+                <button class="btn btn-warning" onclick="closeEditLoc()" style="flex:1;">Batal</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+    <script>
+    DB.init();
+
+    let isLoggedIn = false;
+
+    document.getElementById('login-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const user = document.getElementById('login-user').value;
+        const pass = document.getElementById('login-pass').value;
+        if (user === 'admin' && pass === DB.getAdmin()) {
+            isLoggedIn = true;
+            document.getElementById('login-page').style.display = 'none';
+            document.getElementById('dashboard-page').style.display = 'block';
+            renderAll();
+        } else {
+            document.getElementById('login-error').style.display = 'block';
+        }
+    });
+
+    function doLogout() {
+        isLoggedIn = false;
+        document.getElementById('login-page').style.display = 'block';
+        document.getElementById('dashboard-page').style.display = 'none';
+    }
+
+    function showTab(name) {
+        document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.getElementById('tab-' + name).classList.add('active');
+        document.querySelectorAll('.tab-btn')[['rekap','staf','lokasi'].indexOf(name)].classList.add('active');
+        if (name === 'rekap') renderRekap();
+        if (name === 'staf') renderStaf();
+        if (name === 'lokasi') renderLokasi();
+    }
+
+    function renderAll() { renderRekap(); renderStaf(); renderLokasi(); }
+
+    // === REKAP ===
+    function renderRekap(data) {
+        const list = data || DB.getAttendance();
+        const tbody = document.getElementById('rekap-body');
+        if (!list.length) {
+            tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:2rem;">Belum ada data absensi</td></tr>';
+            return;
+        }
+        tbody.innerHTML = list.map((r, i) => `
+            <tr>
+                <td>${i + 1}</td>
+                <td>${r.nama}</td>
+                <td>${r.tanggal}</td>
+                <td>${r.hari}</td>
+                <td>${r.jam_checkin}</td>
+                <td>${r.jam_checkout || '-'}</td>
+                <td><span class="badge ${r.jam_checkout ? 'badge-success' : 'badge-warning'}">${r.jam_checkout ? 'Lengkap' : 'Belum Pulang'}</span></td>
+                <td><button class="btn btn-primary" style="padding:0.4rem 0.8rem; font-size:0.8rem;" onclick="showDetail(${r.id})">Detail</button></td>
+            </tr>
+        `).join('');
+    }
+
+    function filterRekap() {
+        let list = DB.getAttendance();
+        const tgl = document.getElementById('f-tgl').value;
+        const bulan = document.getElementById('f-bulan').value;
+        const nama = document.getElementById('f-nama').value.toLowerCase();
+        if (tgl) list = list.filter(a => a.tanggal === tgl);
+        if (bulan) list = list.filter(a => a.tanggal.startsWith(bulan));
+        if (nama) list = list.filter(a => a.nama.toLowerCase().includes(nama));
+        renderRekap(list);
+    }
+
+    function resetFilter() {
+        document.getElementById('f-tgl').value = '';
+        document.getElementById('f-bulan').value = '';
+        document.getElementById('f-nama').value = '';
+        renderRekap();
+    }
+
+    function exportRekap() {
+        let list = DB.getAttendance();
+        const tgl = document.getElementById('f-tgl').value;
+        const bulan = document.getElementById('f-bulan').value;
+        const nama = document.getElementById('f-nama').value.toLowerCase();
+        if (tgl) list = list.filter(a => a.tanggal === tgl);
+        if (bulan) list = list.filter(a => a.tanggal.startsWith(bulan));
+        if (nama) list = list.filter(a => a.nama.toLowerCase().includes(nama));
+        exportCSV(list);
+    }
+
+    function showDetail(id) {
+        const r = DB.getAttendance().find(a => a.id === id);
+        if (!r) return;
+        let durasi = '-';
+        if (r.jam_checkout) {
+            const t1 = new Date('2000-01-01 ' + r.jam_checkin);
+            const t2 = new Date('2000-01-01 ' + r.jam_checkout);
+            const diff = t2 - t1;
+            durasi = Math.floor(diff/3600000) + ' jam ' + Math.floor((diff%3600000)/60000) + ' menit';
+        }
+        document.getElementById('detail-content').innerHTML = `
+            <div class="attendance-detail">
+                <div class="row"><span class="label">Nama Staf</span><span class="value">${r.nama}</span></div>
+                <div class="row"><span class="label">Tanggal</span><span class="value">${r.tanggal}</span></div>
+                <div class="row"><span class="label">Hari</span><span class="value">${r.hari}</span></div>
+                <div class="row"><span class="label">Jam Masuk</span><span class="value" style="color:green;font-weight:bold;">${r.jam_checkin}</span></div>
+                <div class="row"><span class="label">Jam Pulang</span><span class="value" style="color:${r.jam_checkout?'red':'#999'};font-weight:bold;">${r.jam_checkout||'Belum pulang'}</span></div>
+                <div class="row"><span class="label">Durasi Kerja</span><span class="value">${durasi}</span></div>
+                <div class="row"><span class="label">Lokasi</span><span class="value">${r.lokasi_nama || '-'}</span></div>
+                <div class="row"><span class="label">Koordinat</span><span class="value">${r.lokasi_lat}, ${r.lokasi_lng}</span></div>
+            </div>`;
+        document.getElementById('detail-modal').style.display = 'flex';
+    }
+
+    function closeDetail() { document.getElementById('detail-modal').style.display = 'none'; }
+
+    // === STAF ===
+    function renderStaf() {
+        const list = DB.getStaff();
+        const tbody = document.getElementById('staf-body');
+        tbody.innerHTML = list.map((s, i) => `
+            <tr>
+                <td>${i + 1}</td>
+                <td>${s.nama}</td>
+                <td><span class="badge ${s.status==='aktif'?'badge-success':'badge-danger'}">${s.status==='aktif'?'Aktif':'Nonaktif'}</span></td>
+                <td style="display:flex; gap:0.5rem;">
+                    <button class="btn btn-primary" style="padding:0.4rem 0.8rem; font-size:0.8rem;" onclick="editStaf(${s.id})">Edit</button>
+                    <button class="btn ${s.status==='aktif'?'btn-warning':'btn-success'}" style="padding:0.4rem 0.8rem; font-size:0.8rem;" onclick="toggleStaf(${s.id})">${s.status==='aktif'?'Nonaktifkan':'Aktifkan'}</button>
+                </td>
+            </tr>
+        `).join('');
+    }
+
+    function addStaf() {
+        const nama = document.getElementById('staf-nama').value.trim();
+        if (!nama) return;
+        const list = DB.getStaff();
+        list.push({ id: genId(list), nama, status: 'aktif' });
+        DB.saveStaff(list);
+        document.getElementById('staf-nama').value = '';
+        renderStaf();
+    }
+
+    function editStaf(id) {
+        const s = DB.getStaff().find(s => s.id === id);
+        if (!s) return;
+        document.getElementById('edit-staf-id').value = s.id;
+        document.getElementById('edit-staf-nama').value = s.nama;
+        document.getElementById('edit-staf-status').value = s.status;
+        document.getElementById('edit-staf-modal').style.display = 'flex';
+    }
+
+    function saveEditStaf() {
+        const id = parseInt(document.getElementById('edit-staf-id').value);
+        const nama = document.getElementById('edit-staf-nama').value.trim();
+        const status = document.getElementById('edit-staf-status').value;
+        if (!nama) return;
+        const list = DB.getStaff();
+        const idx = list.findIndex(s => s.id === id);
+        if (idx !== -1) { list[idx].nama = nama; list[idx].status = status; }
+        DB.saveStaff(list);
+        closeEditStaf();
+        renderStaf();
+    }
+
+    function closeEditStaf() { document.getElementById('edit-staf-modal').style.display = 'none'; }
+
+    function toggleStaf(id) {
+        const list = DB.getStaff();
+        const s = list.find(s => s.id === id);
+        if (s) s.status = s.status === 'aktif' ? 'nonaktif' : 'aktif';
+        DB.saveStaff(list);
+        renderStaf();
+    }
+
+    // === LOKASI ===
+    function renderLokasi() {
+        const list = DB.getLocations();
+        const tbody = document.getElementById('loc-body');
+        tbody.innerHTML = list.map((l, i) => `
+            <tr>
+                <td>${i + 1}</td>
+                <td>${l.nama_lokasi}</td>
+                <td>${l.latitude}</td>
+                <td>${l.longitude}</td>
+                <td>${l.radius} m</td>
+                <td><span class="badge ${l.is_active?'badge-success':'badge-danger'}">${l.is_active?'Aktif':'Nonaktif'}</span></td>
+                <td><button class="btn btn-primary" style="padding:0.4rem 0.8rem; font-size:0.8rem;" onclick="editLoc(${l.id})">Edit</button></td>
+            </tr>
+        `).join('');
+    }
+
+    function addLocation() {
+        const nama = document.getElementById('loc-nama').value.trim();
+        const lat = parseFloat(document.getElementById('loc-lat').value);
+        const lng = parseFloat(document.getElementById('loc-lng').value);
+        const radius = parseInt(document.getElementById('loc-radius').value) || 150;
+
+        if (!nama) { alert('Nama lokasi wajib diisi'); return; }
+        if (isNaN(lat) || lat < -90 || lat > 90) { alert('Latitude tidak valid (harus -90 s/d 90)'); return; }
+        if (isNaN(lng) || lng < -180 || lng > 180) { alert('Longitude tidak valid (harus -180 s/d 180)'); return; }
+
+        const list = DB.getLocations();
+        list.push({ id: genId(list), nama_lokasi: nama, latitude: lat, longitude: lng, radius, is_active: 1 });
+        DB.saveLocations(list);
+        document.getElementById('loc-nama').value = '';
+        document.getElementById('loc-lat').value = '';
+        document.getElementById('loc-lng').value = '';
+        document.getElementById('loc-radius').value = '150';
+        renderLokasi();
+        alert('Lokasi berhasil ditambahkan!');
+    }
+
+    function editLoc(id) {
+        const l = DB.getLocations().find(l => l.id === id);
+        if (!l) return;
+        document.getElementById('edit-loc-id').value = l.id;
+        document.getElementById('edit-loc-nama').value = l.nama_lokasi;
+        document.getElementById('edit-loc-lat').value = l.latitude;
+        document.getElementById('edit-loc-lng').value = l.longitude;
+        document.getElementById('edit-loc-radius').value = l.radius;
+        document.getElementById('edit-loc-active').checked = l.is_active;
+        document.getElementById('edit-loc-modal').style.display = 'flex';
+    }
+
+    function saveEditLoc() {
+        const id = parseInt(document.getElementById('edit-loc-id').value);
+        const nama = document.getElementById('edit-loc-nama').value.trim();
+        const latRaw = document.getElementById('edit-loc-lat').value.replace(/^-+/, '-');
+        const lngRaw = document.getElementById('edit-loc-lng').value.replace(/^-+/, '-');
+        const lat = parseFloat(latRaw);
+        const lng = parseFloat(lngRaw);
+        const radius = parseInt(document.getElementById('edit-loc-radius').value) || 150;
+        const active = document.getElementById('edit-loc-active').checked ? 1 : 0;
+
+        if (!nama) { alert('Nama lokasi wajib diisi'); return; }
+        if (isNaN(lat) || lat < -90 || lat > 90) { alert('Latitude tidak valid (harus -90 s/d 90)'); return; }
+        if (isNaN(lng) || lng < -180 || lng > 180) { alert('Longitude tidak valid (harus -180 s/d 180)'); return; }
+
+        const list = DB.getLocations();
+        const idx = list.findIndex(l => l.id === id);
+        if (idx !== -1) {
+            list[idx] = { ...list[idx], nama_lokasi: nama, latitude: lat, longitude: lng, radius, is_active: active };
+        }
+        DB.saveLocations(list);
+        closeEditLoc();
+        renderLokasi();
+        alert('Lokasi berhasil disimpan!');
+    }
+
+    function closeEditLoc() { document.getElementById('edit-loc-modal').style.display = 'none'; }
+    </script>
+</body>
+</html>

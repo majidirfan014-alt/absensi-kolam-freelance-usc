@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Absensi Kolam Freelance - USC</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="header">
+        <h1>Absensi Kolam Freelance</h1>
+        <p>UNESA Science Center</p>
+    </div>
+
+    <div class="container">
+        <div class="card">
+            <div class="time-display" id="clock">00:00:00</div>
+            <div class="date-display" id="date-display">-</div>
+        </div>
+
+        <div class="card">
+            <div class="card-title">Status GPS</div>
+            <div class="gps-status loading" id="gps-status">Mengambil lokasi GPS...</div>
+
+            <div class="form-group">
+                <label for="staff-select">Pilih Nama</label>
+                <select class="form-control" id="staff-select">
+                    <option value="">-- Pilih Nama --</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="card" id="action-section" style="display:none;">
+            <div class="card-title">Absensi Hari Ini</div>
+            <div id="attendance-info"></div>
+            <div id="result"></div>
+            <button class="btn btn-success" id="btn-checkin" style="display:none;" disabled>Masuk</button>
+            <button class="btn btn-danger" id="btn-checkout" style="display:none;" disabled>Pulang</button>
+        </div>
+
+        <div style="text-align:center; padding:1rem; font-size:0.8rem; color:#6c757d;">
+            <a href="admin.html" style="color:#6c757d;">Admin</a>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+    <script>
+    DB.init();
+
+    let userLocation = null;
+    let staffList = [];
+    let selectedStaff = null;
+
+    function updateClock() {
+        const now = new Date();
+        document.getElementById('clock').textContent = now.toLocaleTimeString('id-ID', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+        document.getElementById('date-display').textContent = now.toLocaleDateString('id-ID', {weekday:'long',year:'numeric',month:'long',day:'numeric'});
+    }
+    updateClock();
+    setInterval(updateClock, 1000);
+
+    function loadStaff() {
+        staffList = DB.getStaff().filter(s => s.status === 'aktif');
+        const sel = document.getElementById('staff-select');
+        sel.innerHTML = '<option value="">-- Pilih Nama --</option>';
+        staffList.forEach(s => {
+            sel.innerHTML += `<option value="${s.id}">${s.nama}</option>`;
+        });
+    }
+    loadStaff();
+
+    function initGPS() {
+        const el = document.getElementById('gps-status');
+        if (!navigator.geolocation) {
+            el.textContent = 'Geolocation tidak didukung';
+            el.className = 'gps-status inactive';
+            return;
+        }
+        navigator.geolocation.getCurrentPosition(
+            pos => {
+                userLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+                el.textContent = 'Lokasi GPS aktif';
+                el.className = 'gps-status active';
+                updateButtons();
+            },
+            err => {
+                el.textContent = 'GPS tidak aktif - izinkan akses lokasi';
+                el.className = 'gps-status inactive';
+            },
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        );
+    }
+    initGPS();
+
+    document.getElementById('staff-select').addEventListener('change', function() {
+        const id = parseInt(this.value);
+        if (!id) {
+            selectedStaff = null;
+            document.getElementById('action-section').style.display = 'none';
+            return;
+        }
+        selectedStaff = staffList.find(s => s.id === id);
+        document.getElementById('action-section').style.display = 'block';
+        updateButtons();
+    });
+
+    function updateButtons() {
+        const btnIn = document.getElementById('btn-checkin');
+        const btnOut = document.getElementById('btn-checkout');
+        const info = document.getElementById('attendance-info');
+
+        if (!selectedStaff) return;
+
+        const att = getAttendanceToday(selectedStaff.id);
+
+        if (att && att.jam_checkout) {
+            btnIn.style.display = 'none';
+            btnOut.style.display = 'none';
+            info.innerHTML = `<div class="status-info success">Lengkap: ${att.jam_checkin} - ${att.jam_checkout}</div>`;
+        } else if (att && att.jam_checkin) {
+            btnIn.style.display = 'none';
+            btnOut.style.display = 'block';
+            btnOut.disabled = !userLocation;
+            info.innerHTML = `<div class="status-info info">Masuk: ${att.jam_checkin} | Menunggu pulang</div>`;
+        } else {
+            btnIn.style.display = 'block';
+            btnIn.disabled = !userLocation;
+            btnOut.style.display = 'none';
+            info.innerHTML = '';
+        }
+        document.getElementById('result').innerHTML = '';
+    }
+
+    document.getElementById('btn-checkin').addEventListener('click', function() {
+        if (!selectedStaff || !userLocation) return;
+        this.disabled = true;
+        this.innerHTML = '<span class="spinner"></span>Memproses...';
+
+        const geo = checkGeofence(userLocation.lat, userLocation.lng);
+        if (!geo.valid) {
+            showResult('error', `Di luar area kolam UNESA Science Center. Anda ~${geo.distance}m dari area absen.`);
+            this.disabled = false;
+            this.textContent = 'Masuk';
+            return;
+        }
+
+        const att = {
+            id: genId(DB.getAttendance()),
+            staff_id: selectedStaff.id,
+            nama: selectedStaff.nama,
+            tanggal: today(),
+            hari: getHari(today()),
+            jam_checkin: nowTime(),
+            jam_checkout: null,
+            lokasi_lat: userLocation.lat,
+            lokasi_lng: userLocation.lng,
+            lokasi_nama: geo.location.nama_lokasi,
+            status: 'Hadir'
+        };
+
+        const all = DB.getAttendance();
+        all.push(att);
+        DB.saveAttendance(all);
+
+        showResult('success', 'Absen masuk berhasil!', {
+            nama: att.nama, tanggal: att.tanggal, hari: att.hari,
+            jam_checkin: att.jam_checkin, lokasi: att.lokasi_nama, jarak: geo.distance + ' meter'
+        });
+
+        this.disabled = false;
+        this.textContent = 'Masuk';
+        updateButtons();
+    });
+
+    document.getElementById('btn-checkout').addEventListener('click', function() {
+        if (!selectedStaff) return;
+        this.disabled = true;
+        this.innerHTML = '<span class="spinner"></span>Memproses...';
+
+        const all = DB.getAttendance();
+        const idx = all.findIndex(a => a.staff_id === selectedStaff.id && a.tanggal === today());
+        if (idx === -1) {
+            showResult('error', 'Data absensi tidak ditemukan');
+            this.disabled = false;
+            this.textContent = 'Pulang';
+            return;
+        }
+
+        all[idx].jam_checkout = nowTime();
+        DB.saveAttendance(all);
+
+        const a = all[idx];
+        const inTime = new Date('2000-01-01 ' + a.jam_checkin);
+        const outTime = new Date('2000-01-01 ' + a.jam_checkout);
+        const diff = outTime - inTime;
+        const hours = Math.floor(diff / 3600000);
+        const mins = Math.floor((diff % 3600000) / 60000);
+
+        showResult('success', 'Absen pulang berhasil!', {
+            nama: a.nama, tanggal: a.tanggal, hari: a.hari,
+            jam_checkin: a.jam_checkin, jam_checkout: a.jam_checkout,
+            durasi: hours + ' jam ' + mins + ' menit'
+        });
+
+        this.disabled = false;
+        this.textContent = 'Pulang';
+        updateButtons();
+    });
+
+    function showResult(type, msg, data) {
+        let html = `<div class="status-info ${type}">${msg}</div>`;
+        if (data && type === 'success') {
+            html += '<div class="attendance-detail">';
+            if (data.nama) html += `<div class="row"><span class="label">Nama</span><span class="value">${data.nama}</span></div>`;
+            if (data.tanggal) html += `<div class="row"><span class="label">Tanggal</span><span class="value">${data.tanggal}</span></div>`;
+            if (data.hari) html += `<div class="row"><span class="label">Hari</span><span class="value">${data.hari}</span></div>`;
+            if (data.jam_checkin) html += `<div class="row"><span class="label">Jam Masuk</span><span class="value">${data.jam_checkin}</span></div>`;
+            if (data.jam_checkout) html += `<div class="row"><span class="label">Jam Pulang</span><span class="value">${data.jam_checkout}</span></div>`;
+            if (data.durasi) html += `<div class="row"><span class="label">Durasi</span><span class="value">${data.durasi}</span></div>`;
+            if (data.lokasi) html += `<div class="row"><span class="label">Lokasi</span><span class="value">${data.lokasi}</span></div>`;
+            if (data.jarak) html += `<div class="row"><span class="label">Jarak</span><span class="value">${data.jarak}</span></div>`;
+            html += '</div>';
+        }
+        document.getElementById('result').innerHTML = html;
+    }
+    </script>
+</body>
+</html>
