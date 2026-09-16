@@ -43,13 +43,14 @@
         </div>
     </div>
 
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
     <script src="app.js"></script>
     <script>
-    DB.init();
-
     let userLocation = null;
     let staffList = [];
     let selectedStaff = null;
+    let locations = [];
 
     function updateClock() {
         const now = new Date();
@@ -59,15 +60,27 @@
     updateClock();
     setInterval(updateClock, 1000);
 
-    function loadStaff() {
-        staffList = DB.getStaff().filter(s => s.status === 'aktif');
+    async function loadStaff() {
+        staffList = await DB.getStaff();
+        staffList = staffList.filter(s => s.status === 'aktif');
         const sel = document.getElementById('staff-select');
         sel.innerHTML = '<option value="">-- Pilih Nama --</option>';
         staffList.forEach(s => {
             sel.innerHTML += `<option value="${s.id}">${s.nama}</option>`;
         });
     }
-    loadStaff();
+
+    async function loadLocations() {
+        locations = await DB.getLocations();
+    }
+
+    async function initApp() {
+        await DB.init();
+        await loadStaff();
+        await loadLocations();
+        initGPS();
+    }
+    initApp();
 
     function initGPS() {
         const el = document.getElementById('gps-status');
@@ -90,10 +103,9 @@
             { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
         );
     }
-    initGPS();
 
-    document.getElementById('staff-select').addEventListener('change', function() {
-        const id = parseInt(this.value);
+    document.getElementById('staff-select').addEventListener('change', async function() {
+        const id = this.value;
         if (!id) {
             selectedStaff = null;
             document.getElementById('action-section').style.display = 'none';
@@ -101,17 +113,17 @@
         }
         selectedStaff = staffList.find(s => s.id === id);
         document.getElementById('action-section').style.display = 'block';
-        updateButtons();
+        await updateButtons();
     });
 
-    function updateButtons() {
+    async function updateButtons() {
         const btnIn = document.getElementById('btn-checkin');
         const btnOut = document.getElementById('btn-checkout');
         const info = document.getElementById('attendance-info');
 
         if (!selectedStaff) return;
 
-        const att = getAttendanceToday(selectedStaff.id);
+        const att = await DB.getAttendanceToday(selectedStaff.id);
 
         if (att && att.jam_checkout) {
             btnIn.style.display = 'none';
@@ -131,7 +143,23 @@
         document.getElementById('result').innerHTML = '';
     }
 
-    document.getElementById('btn-checkin').addEventListener('click', function() {
+    function checkGeofence(lat, lng) {
+        const activeLocations = locations.filter(l => l.is_active);
+        for (const loc of activeLocations) {
+            const dist = haversineDistance(lat, lng, loc.latitude, loc.longitude);
+            if (dist <= loc.radius) {
+                return { valid: true, location: loc, distance: Math.round(dist) };
+            }
+        }
+        let minDist = Infinity;
+        activeLocations.forEach(l => {
+            const d = haversineDistance(lat, lng, l.latitude, l.longitude);
+            if (d < minDist) minDist = d;
+        });
+        return { valid: false, distance: Math.round(minDist), locations: activeLocations };
+    }
+
+    document.getElementById('btn-checkin').addEventListener('click', async function() {
         if (!selectedStaff || !userLocation) return;
         this.disabled = true;
         this.innerHTML = '<span class="spinner"></span>Memproses...';
@@ -144,67 +172,74 @@
             return;
         }
 
-        const att = {
-            id: genId(DB.getAttendance()),
-            staff_id: selectedStaff.id,
-            nama: selectedStaff.nama,
-            tanggal: today(),
-            hari: getHari(today()),
-            jam_checkin: nowTime(),
-            jam_checkout: null,
-            lokasi_lat: userLocation.lat,
-            lokasi_lng: userLocation.lng,
-            lokasi_nama: geo.location.nama_lokasi,
-            status: 'Hadir'
-        };
+        try {
+            const att = {
+                staff_id: selectedStaff.id,
+                nama: selectedStaff.nama,
+                tanggal: today(),
+                hari: getHari(today()),
+                jam_checkin: nowTime(),
+                jam_checkout: null,
+                lokasi_lat: userLocation.lat,
+                lokasi_lng: userLocation.lng,
+                lokasi_nama: geo.location.nama_lokasi,
+                status: 'Hadir'
+            };
 
-        const all = DB.getAttendance();
-        all.push(att);
-        DB.saveAttendance(all);
+            await DB.addAttendance(att);
 
-        showResult('success', 'Absen masuk berhasil!', {
-            nama: att.nama, tanggal: att.tanggal, hari: att.hari,
-            jam_checkin: att.jam_checkin, lokasi: att.lokasi_nama, jarak: geo.distance + ' meter'
-        });
+            showResult('success', 'Absen masuk berhasil!', {
+                nama: att.nama, tanggal: att.tanggal, hari: att.hari,
+                jam_checkin: att.jam_checkin, lokasi: att.lokasi_nama, jarak: geo.distance + ' meter'
+            });
 
-        this.disabled = false;
-        this.textContent = 'Masuk';
-        updateButtons();
+            this.disabled = false;
+            this.textContent = 'Masuk';
+            await updateButtons();
+        } catch (e) {
+            showResult('error', 'Gagal menyimpan data: ' + e.message);
+            this.disabled = false;
+            this.textContent = 'Masuk';
+        }
     });
 
-    document.getElementById('btn-checkout').addEventListener('click', function() {
+    document.getElementById('btn-checkout').addEventListener('click', async function() {
         if (!selectedStaff) return;
         this.disabled = true;
         this.innerHTML = '<span class="spinner"></span>Memproses...';
 
-        const all = DB.getAttendance();
-        const idx = all.findIndex(a => a.staff_id === selectedStaff.id && a.tanggal === today());
-        if (idx === -1) {
-            showResult('error', 'Data absensi tidak ditemukan');
+        try {
+            const att = await DB.getAttendanceToday(selectedStaff.id);
+            if (!att) {
+                showResult('error', 'Data absensi tidak ditemukan');
+                this.disabled = false;
+                this.textContent = 'Pulang';
+                return;
+            }
+
+            const jam = nowTime();
+            await DB.updateCheckout(att.id, jam);
+
+            const inTime = new Date('2000-01-01 ' + att.jam_checkin);
+            const outTime = new Date('2000-01-01 ' + jam);
+            const diff = outTime - inTime;
+            const hours = Math.floor(diff / 3600000);
+            const mins = Math.floor((diff % 3600000) / 60000);
+
+            showResult('success', 'Absen pulang berhasil!', {
+                nama: att.nama, tanggal: att.tanggal, hari: att.hari,
+                jam_checkin: att.jam_checkin, jam_checkout: jam,
+                durasi: hours + ' jam ' + mins + ' menit'
+            });
+
             this.disabled = false;
             this.textContent = 'Pulang';
-            return;
+            await updateButtons();
+        } catch (e) {
+            showResult('error', 'Gagal menyimpan data: ' + e.message);
+            this.disabled = false;
+            this.textContent = 'Pulang';
         }
-
-        all[idx].jam_checkout = nowTime();
-        DB.saveAttendance(all);
-
-        const a = all[idx];
-        const inTime = new Date('2000-01-01 ' + a.jam_checkin);
-        const outTime = new Date('2000-01-01 ' + a.jam_checkout);
-        const diff = outTime - inTime;
-        const hours = Math.floor(diff / 3600000);
-        const mins = Math.floor((diff % 3600000) / 60000);
-
-        showResult('success', 'Absen pulang berhasil!', {
-            nama: a.nama, tanggal: a.tanggal, hari: a.hari,
-            jam_checkin: a.jam_checkin, jam_checkout: a.jam_checkout,
-            durasi: hours + ' jam ' + mins + ' menit'
-        });
-
-        this.disabled = false;
-        this.textContent = 'Pulang';
-        updateButtons();
     });
 
     function showResult(type, msg, data) {

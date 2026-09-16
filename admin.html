@@ -236,20 +236,30 @@
         </div>
     </div>
 
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
     <script src="app.js"></script>
     <script>
-    DB.init();
+    let allAttendance = [];
+    let allStaff = [];
+    let allLocations = [];
 
-    let isLoggedIn = false;
+    async function initAdmin() {
+        await DB.init();
+        allStaff = await DB.getStaff();
+        allLocations = await DB.getLocations();
+        allAttendance = await DB.getAttendance();
+    }
 
-    document.getElementById('login-form').addEventListener('submit', function(e) {
+    document.getElementById('login-form').addEventListener('submit', async function(e) {
         e.preventDefault();
         const user = document.getElementById('login-user').value;
         const pass = document.getElementById('login-pass').value;
-        if (user === 'admin' && pass === DB.getAdmin()) {
-            isLoggedIn = true;
+        const adminData = await DB.getAdmin();
+        if (user === 'admin' && pass === adminData.password) {
             document.getElementById('login-page').style.display = 'none';
             document.getElementById('dashboard-page').style.display = 'block';
+            await initAdmin();
             renderAll();
         } else {
             document.getElementById('login-error').style.display = 'block';
@@ -257,7 +267,6 @@
     });
 
     function doLogout() {
-        isLoggedIn = false;
         document.getElementById('login-page').style.display = 'block';
         document.getElementById('dashboard-page').style.display = 'none';
     }
@@ -272,11 +281,18 @@
         if (name === 'lokasi') renderLokasi();
     }
 
-    function renderAll() { renderRekap(); renderStaf(); renderLokasi(); }
+    async function renderAll() {
+        allAttendance = await DB.getAttendance();
+        allStaff = await DB.getStaff();
+        allLocations = await DB.getLocations();
+        renderRekap();
+        renderStaf();
+        renderLokasi();
+    }
 
     // === REKAP ===
     function renderRekap(data) {
-        const list = data || DB.getAttendance();
+        const list = data || allAttendance;
         const tbody = document.getElementById('rekap-body');
         if (!list.length) {
             tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:2rem;">Belum ada data absensi</td></tr>';
@@ -291,19 +307,19 @@
                 <td>${r.jam_checkin}</td>
                 <td>${r.jam_checkout || '-'}</td>
                 <td><span class="badge ${r.jam_checkout ? 'badge-success' : 'badge-warning'}">${r.jam_checkout ? 'Lengkap' : 'Belum Pulang'}</span></td>
-                <td><button class="btn btn-primary" style="padding:0.4rem 0.8rem; font-size:0.8rem;" onclick="showDetail(${r.id})">Detail</button></td>
+                <td><button class="btn btn-primary" style="padding:0.4rem 0.8rem; font-size:0.8rem;" onclick="showDetail('${r.id}')">Detail</button></td>
             </tr>
         `).join('');
     }
 
     function filterRekap() {
-        let list = DB.getAttendance();
+        let list = [...allAttendance];
         const tgl = document.getElementById('f-tgl').value;
         const bulan = document.getElementById('f-bulan').value;
         const nama = document.getElementById('f-nama').value.toLowerCase();
         if (tgl) list = list.filter(a => a.tanggal === tgl);
-        if (bulan) list = list.filter(a => a.tanggal.startsWith(bulan));
-        if (nama) list = list.filter(a => a.nama.toLowerCase().includes(nama));
+        if (bulan) list = list.filter(a => a.tanggal && a.tanggal.startsWith(bulan));
+        if (nama) list = list.filter(a => a.nama && a.nama.toLowerCase().includes(nama));
         renderRekap(list);
     }
 
@@ -311,22 +327,22 @@
         document.getElementById('f-tgl').value = '';
         document.getElementById('f-bulan').value = '';
         document.getElementById('f-nama').value = '';
-        renderRekap();
+        renderRekap(allAttendance);
     }
 
     function exportRekap() {
-        let list = DB.getAttendance();
+        let list = [...allAttendance];
         const tgl = document.getElementById('f-tgl').value;
         const bulan = document.getElementById('f-bulan').value;
         const nama = document.getElementById('f-nama').value.toLowerCase();
         if (tgl) list = list.filter(a => a.tanggal === tgl);
-        if (bulan) list = list.filter(a => a.tanggal.startsWith(bulan));
-        if (nama) list = list.filter(a => a.nama.toLowerCase().includes(nama));
+        if (bulan) list = list.filter(a => a.tanggal && a.tanggal.startsWith(bulan));
+        if (nama) list = list.filter(a => a.nama && a.nama.toLowerCase().includes(nama));
         exportCSV(list);
     }
 
     function showDetail(id) {
-        const r = DB.getAttendance().find(a => a.id === id);
+        const r = allAttendance.find(a => a.id === id);
         if (!r) return;
         let durasi = '-';
         if (r.jam_checkout) {
@@ -353,33 +369,31 @@
 
     // === STAF ===
     function renderStaf() {
-        const list = DB.getStaff();
         const tbody = document.getElementById('staf-body');
-        tbody.innerHTML = list.map((s, i) => `
+        tbody.innerHTML = allStaff.map((s, i) => `
             <tr>
                 <td>${i + 1}</td>
                 <td>${s.nama}</td>
                 <td><span class="badge ${s.status==='aktif'?'badge-success':'badge-danger'}">${s.status==='aktif'?'Aktif':'Nonaktif'}</span></td>
                 <td style="display:flex; gap:0.5rem;">
-                    <button class="btn btn-primary" style="padding:0.4rem 0.8rem; font-size:0.8rem;" onclick="editStaf(${s.id})">Edit</button>
-                    <button class="btn ${s.status==='aktif'?'btn-warning':'btn-success'}" style="padding:0.4rem 0.8rem; font-size:0.8rem;" onclick="toggleStaf(${s.id})">${s.status==='aktif'?'Nonaktifkan':'Aktifkan'}</button>
+                    <button class="btn btn-primary" style="padding:0.4rem 0.8rem; font-size:0.8rem;" onclick="editStaf('${s.id}')">Edit</button>
+                    <button class="btn ${s.status==='aktif'?'btn-warning':'btn-success'}" style="padding:0.4rem 0.8rem; font-size:0.8rem;" onclick="toggleStaf('${s.id}','${s.status}')">${s.status==='aktif'?'Nonaktifkan':'Aktifkan'}</button>
                 </td>
             </tr>
         `).join('');
     }
 
-    function addStaf() {
+    async function addStaf() {
         const nama = document.getElementById('staf-nama').value.trim();
         if (!nama) return;
-        const list = DB.getStaff();
-        list.push({ id: genId(list), nama, status: 'aktif' });
-        DB.saveStaff(list);
+        await DB.addStaff(nama);
         document.getElementById('staf-nama').value = '';
+        allStaff = await DB.getStaff();
         renderStaf();
     }
 
     function editStaf(id) {
-        const s = DB.getStaff().find(s => s.id === id);
+        const s = allStaff.find(s => s.id === id);
         if (!s) return;
         document.getElementById('edit-staf-id').value = s.id;
         document.getElementById('edit-staf-nama').value = s.nama;
@@ -387,34 +401,29 @@
         document.getElementById('edit-staf-modal').style.display = 'flex';
     }
 
-    function saveEditStaf() {
-        const id = parseInt(document.getElementById('edit-staf-id').value);
+    async function saveEditStaf() {
+        const id = document.getElementById('edit-staf-id').value;
         const nama = document.getElementById('edit-staf-nama').value.trim();
         const status = document.getElementById('edit-staf-status').value;
         if (!nama) return;
-        const list = DB.getStaff();
-        const idx = list.findIndex(s => s.id === id);
-        if (idx !== -1) { list[idx].nama = nama; list[idx].status = status; }
-        DB.saveStaff(list);
+        await DB.updateStaff(id, nama, status);
         closeEditStaf();
+        allStaff = await DB.getStaff();
         renderStaf();
     }
 
     function closeEditStaf() { document.getElementById('edit-staf-modal').style.display = 'none'; }
 
-    function toggleStaf(id) {
-        const list = DB.getStaff();
-        const s = list.find(s => s.id === id);
-        if (s) s.status = s.status === 'aktif' ? 'nonaktif' : 'aktif';
-        DB.saveStaff(list);
+    async function toggleStaf(id, currentStatus) {
+        await DB.toggleStaff(id, currentStatus);
+        allStaff = await DB.getStaff();
         renderStaf();
     }
 
     // === LOKASI ===
     function renderLokasi() {
-        const list = DB.getLocations();
         const tbody = document.getElementById('loc-body');
-        tbody.innerHTML = list.map((l, i) => `
+        tbody.innerHTML = allLocations.map((l, i) => `
             <tr>
                 <td>${i + 1}</td>
                 <td>${l.nama_lokasi}</td>
@@ -422,12 +431,12 @@
                 <td>${l.longitude}</td>
                 <td>${l.radius} m</td>
                 <td><span class="badge ${l.is_active?'badge-success':'badge-danger'}">${l.is_active?'Aktif':'Nonaktif'}</span></td>
-                <td><button class="btn btn-primary" style="padding:0.4rem 0.8rem; font-size:0.8rem;" onclick="editLoc(${l.id})">Edit</button></td>
+                <td><button class="btn btn-primary" style="padding:0.4rem 0.8rem; font-size:0.8rem;" onclick="editLoc('${l.id}')">Edit</button></td>
             </tr>
         `).join('');
     }
 
-    function addLocation() {
+    async function addLocation() {
         const nama = document.getElementById('loc-nama').value.trim();
         const lat = parseFloat(document.getElementById('loc-lat').value);
         const lng = parseFloat(document.getElementById('loc-lng').value);
@@ -437,19 +446,18 @@
         if (isNaN(lat) || lat < -90 || lat > 90) { alert('Latitude tidak valid (harus -90 s/d 90)'); return; }
         if (isNaN(lng) || lng < -180 || lng > 180) { alert('Longitude tidak valid (harus -180 s/d 180)'); return; }
 
-        const list = DB.getLocations();
-        list.push({ id: genId(list), nama_lokasi: nama, latitude: lat, longitude: lng, radius, is_active: 1 });
-        DB.saveLocations(list);
+        await DB.addLocation(nama, lat, lng, radius);
         document.getElementById('loc-nama').value = '';
         document.getElementById('loc-lat').value = '';
         document.getElementById('loc-lng').value = '';
         document.getElementById('loc-radius').value = '150';
+        allLocations = await DB.getLocations();
         renderLokasi();
         alert('Lokasi berhasil ditambahkan!');
     }
 
     function editLoc(id) {
-        const l = DB.getLocations().find(l => l.id === id);
+        const l = allLocations.find(l => l.id === id);
         if (!l) return;
         document.getElementById('edit-loc-id').value = l.id;
         document.getElementById('edit-loc-nama').value = l.nama_lokasi;
@@ -460,8 +468,8 @@
         document.getElementById('edit-loc-modal').style.display = 'flex';
     }
 
-    function saveEditLoc() {
-        const id = parseInt(document.getElementById('edit-loc-id').value);
+    async function saveEditLoc() {
+        const id = document.getElementById('edit-loc-id').value;
         const nama = document.getElementById('edit-loc-nama').value.trim();
         const latRaw = document.getElementById('edit-loc-lat').value.replace(/^-+/, '-');
         const lngRaw = document.getElementById('edit-loc-lng').value.replace(/^-+/, '-');
@@ -474,13 +482,9 @@
         if (isNaN(lat) || lat < -90 || lat > 90) { alert('Latitude tidak valid (harus -90 s/d 90)'); return; }
         if (isNaN(lng) || lng < -180 || lng > 180) { alert('Longitude tidak valid (harus -180 s/d 180)'); return; }
 
-        const list = DB.getLocations();
-        const idx = list.findIndex(l => l.id === id);
-        if (idx !== -1) {
-            list[idx] = { ...list[idx], nama_lokasi: nama, latitude: lat, longitude: lng, radius, is_active: active };
-        }
-        DB.saveLocations(list);
+        await DB.saveLocation({ id, nama_lokasi: nama, latitude: lat, longitude: lng, radius, is_active: active });
         closeEditLoc();
+        allLocations = await DB.getLocations();
         renderLokasi();
         alert('Lokasi berhasil disimpan!');
     }
